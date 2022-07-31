@@ -1,0 +1,33 @@
+package gorgp
+
+import (
+	"github.com/2mikeg/gorgp/pkg/client"
+	"github.com/2mikeg/gorgp/pkg/consumer"
+	"github.com/2mikeg/gorgp/pkg/producer"
+	"github.com/go-redis/redis/v9"
+)
+
+type RedisClient struct {
+	GroupName, ConsumerName, StreamName, RedisHost string
+	RedisPort, Db                                  int
+}
+
+type NewClient interface {
+	getClient(RedisHost string, RedisPort string, Db int) *redis.Client
+}
+
+func (r RedisClient) getClient() *redis.Client {
+	client := client.RedisClient(r.RedisHost, r.RedisPort, r.Db)
+	return client
+}
+
+func (r RedisClient) Consume() []redis.XMessage {
+	client := r.getClient()
+	messages := consumer.Consume(client, r.GroupName, r.ConsumerName, r.StreamName)
+	return messages
+}
+
+func (r RedisClient) Produce(message map[string]interface{}) {
+	client := r.getClient()
+	producer.Produce(client, r.StreamName, message)
+}
