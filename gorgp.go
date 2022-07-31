@@ -28,6 +28,12 @@ func (r RedisClient) Consume() []redis.XMessage {
 	return messages
 }
 
+func (r RedisClient) AcknowledgeMessage(id string) {
+	client := r.getClient()
+	consumer.AcknowledgeMessage(client, r.GroupName, r.StreamName, id)
+	client.Close()
+}
+
 func (r RedisClient) Produce(message map[string]interface{}) {
 	client := r.getClient()
 	producer.Produce(client, r.StreamName, message)
