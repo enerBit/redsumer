@@ -13,7 +13,7 @@ type RedisClient struct {
 }
 
 type NewClient interface {
-	getClient(RedisHost string, RedisPort string, Db int) *redis.Client
+	getClient(RedisHost string, RedisPort, Db int) *redis.Client
 }
 
 func (r RedisClient) getClient() *redis.Client {
