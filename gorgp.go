@@ -1,9 +1,9 @@
 package gorgp
 
 import (
-	"github.com/2mikeg/gorgp/pkg/client"
-	"github.com/2mikeg/gorgp/pkg/consumer"
-	"github.com/2mikeg/gorgp/pkg/producer"
+	"github.com/enerBit/redsumer/pkg/client"
+	"github.com/enerBit/redsumer/pkg/consumer"
+	"github.com/enerBit/redsumer/pkg/producer"
 	"github.com/go-redis/redis/v9"
 )
 
