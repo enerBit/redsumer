@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/2mikeg/gorgp/pkg/client"
+	"github.com/enerBit/redsumer/pkg/client"
 )
 
 func TestClient(t *testing.T) {
