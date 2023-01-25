@@ -1,4 +1,4 @@
-module github.com/2mikeg/gorgp
+module github.com/enerBit/redsumer
 
 go 1.17
 
