@@ -1,19 +1,15 @@
 package gorgp
 
 import (
-	"github.com/2mikeg/gorgp/pkg/client"
-	"github.com/2mikeg/gorgp/pkg/consumer"
-	"github.com/2mikeg/gorgp/pkg/producer"
+	"github.com/enerBit/redsumer/pkg/client"
+	"github.com/enerBit/redsumer/pkg/consumer"
+	"github.com/enerBit/redsumer/pkg/producer"
 	"github.com/go-redis/redis/v9"
 )
 
 type RedisClient struct {
 	GroupName, ConsumerName, StreamName, RedisHost string
 	RedisPort, Db                                  int
-}
-
-type NewClient interface {
-	getClient(RedisHost string, RedisPort, Db int) *redis.Client
 }
 
 func (r RedisClient) getClient() *redis.Client {
