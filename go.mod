@@ -1,6 +1,6 @@
 module github.com/enerBit/redsumer
 
-go 1.17
+go 1.18
 
 require (
 	github.com/go-redis/redismock/v9 v9.0.2
