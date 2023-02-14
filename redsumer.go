@@ -41,3 +41,18 @@ func (c redConsumer) Consume(ctx context.Context) ([]redis.XMessage, error) {
 	messages, err := consumer.Consume(ctx, c.client, c.args.Group, c.args.ConsumerName, c.args.Stream)
 	return messages, err
 }
+
+func (c redConsumer) WaitForStream(ctx context.Context, tries []int) error {
+
+	err := consumer.WaitForStream(ctx, c.client, c.args.Stream, tries)
+	return err
+}
+
+// Get the raw redis client from the librari redis-go
+func (c redConsumer) RawRedis() *redis.Client {
+	return c.client
+}
+
+func (c redConsumer) GetArgs() RedConsumerArgs {
+	return c.args
+}
