@@ -9,11 +9,11 @@ import (
 )
 
 type redConsumer struct {
-	args   redConsumerArgs
+	args   RedConsumerArgs
 	client *redis.Client
 }
 
-type redConsumerArgs struct {
+type RedConsumerArgs struct {
 	Group        string
 	Stream       string
 	ConsumerName string
@@ -22,7 +22,7 @@ type redConsumerArgs struct {
 	Db           int
 }
 
-func NewRedisConsumer(args redConsumerArgs) (redConsumer, error) {
+func NewRedisConsumer(args RedConsumerArgs) (redConsumer, error) {
 
 	client, err := client.NewRedisClient(args.RedisHost, args.RedisPort, args.Db)
 
