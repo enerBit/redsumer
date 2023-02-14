@@ -42,9 +42,19 @@ func (c redConsumer) Consume(ctx context.Context) ([]redis.XMessage, error) {
 	return messages, err
 }
 
+// given a list of tries([]int) this method will wait until the stream is ready
+// if the stream is not ready after the tries it will return an erro
+// the numbers in the tries array represent the number of seconds that the loop will wait until it tries again
 func (c redConsumer) WaitForStream(ctx context.Context, tries []int) error {
 
 	err := consumer.WaitForStream(ctx, c.client, c.args.Stream, tries)
+	return err
+}
+
+// Creates a xonumer group for the redis stream
+// if the group already exist it will return an error
+func (c redConsumer) CreateGroup(ctx context.Context, start string) error {
+	err := c.client.XGroupCreate(ctx, c.args.Stream, c.args.Group, start).Err()
 	return err
 }
 
