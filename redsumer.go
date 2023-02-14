@@ -3,8 +3,8 @@ package redsumer
 import (
 	"context"
 
-	"github.com/enerBit/redsumer/pkg/client"
-	"github.com/enerBit/redsumer/pkg/consumer"
+	"github.com/2mikeg/redsumer/pkg/client"
+	"github.com/2mikeg/redsumer/pkg/consumer"
 	"github.com/redis/go-redis/v9"
 )
 
