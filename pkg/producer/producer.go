@@ -2,12 +2,11 @@ package producer
 
 import (
 	"context"
-	"log"
 
-	"github.com/go-redis/redis/v9"
+	"github.com/redis/go-redis/v9"
 )
 
-func Produce(client *redis.Client, streamName string, message map[string]interface{}) {
+func Produce(client *redis.Client, streamName string, message map[string]interface{}) error {
 
 	ctx := context.Background()
 
@@ -18,8 +17,8 @@ func Produce(client *redis.Client, streamName string, message map[string]interfa
 	}).Err()
 
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
-	log.Printf("message sent to stream '%s'", streamName)
+	return nil
 }

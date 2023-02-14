@@ -9,7 +9,7 @@ import (
 
 func TestClient(t *testing.T) {
 
-	client := client.RedisClient("localhost", 6379, 0)
+	client, _ := client.NewRedisClient("localhost", 6379, 0)
 	clientTypeString := fmt.Sprint(client)
 
 	if clientTypeString != "Redis<localhost:6379 db:0>" {
