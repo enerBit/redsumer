@@ -3,6 +3,7 @@ package consumer
 import (
 	"context"
 	"errors"
+	"os"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -55,10 +56,11 @@ func Consume(ctx context.Context, client *redis.Client, groupName string, consum
 		Consumer: consumerName,
 		Streams:  []string{streamName, ">"},
 		Count:    0,
+		Block:    1,
 		NoAck:    false,
 	}).Result()
 
-	if err != nil {
+	if err != nil && !os.IsTimeout(err) {
 		return []redis.XMessage{}, err
 	}
 
