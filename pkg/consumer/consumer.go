@@ -55,7 +55,6 @@ func Consume(ctx context.Context, client *redis.Client, groupName string, consum
 		Consumer: consumerName,
 		Streams:  []string{streamName, ">"},
 		Count:    0,
-		Block:    10,
 		NoAck:    false,
 	}).Result()
 
