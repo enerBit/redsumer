@@ -3,6 +3,7 @@ package consumer
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"time"
 
@@ -44,6 +45,7 @@ func Consume(ctx context.Context, client *redis.Client, groupName string, consum
 	}).Result()
 
 	if err != nil {
+		err := fmt.Errorf("error xautoclaim: %v", err)
 		return []redis.XMessage{}, err
 	}
 
@@ -56,11 +58,12 @@ func Consume(ctx context.Context, client *redis.Client, groupName string, consum
 		Consumer: consumerName,
 		Streams:  []string{streamName, ">"},
 		Count:    0,
-		Block:    1,
+		Block:    time.Millisecond * 1,
 		NoAck:    false,
 	}).Result()
 
 	if err != nil && !os.IsTimeout(err) {
+		err := fmt.Errorf("error xreadgroup: %v", err)
 		return []redis.XMessage{}, err
 	}
 

@@ -51,6 +51,11 @@ func (c redConsumer) WaitForStream(ctx context.Context, tries []int) error {
 	return err
 }
 
+func (c redConsumer) Acknowledge(ctx context.Context, ids ...string) error {
+	err := c.client.XAck(ctx, c.args.Stream, c.args.Group, ids...).Err()
+	return err
+}
+
 // Creates a xonumer group for the redis stream
 // if the group already exist it will return an error
 func (c redConsumer) CreateGroup(ctx context.Context, start string) error {
