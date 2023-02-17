@@ -64,7 +64,7 @@ func Consume(ctx context.Context, client *redis.Client, groupName string, consum
 
 	if err != nil && !os.IsTimeout(err) {
 		err := fmt.Errorf("error xreadgroup: %v", err)
-		return []redis.XMessage{}, err
+		return messages, err
 	}
 
 	if len(readMessages) > 0 {
