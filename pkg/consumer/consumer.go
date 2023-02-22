@@ -16,6 +16,8 @@ func WaitForStream(ctx context.Context, client *redis.Client, streamName string,
 
 	for _, waittime := range tries {
 
+		time.Sleep(time.Second * time.Duration(waittime))
+
 		streamReady, err := client.Exists(ctx, streamName).Result()
 		if err != nil {
 			return err
@@ -24,8 +26,6 @@ func WaitForStream(ctx context.Context, client *redis.Client, streamName string,
 		if streamReady == 1 {
 			return nil
 		}
-
-		time.Sleep(time.Second * time.Duration(waittime))
 	}
 
 	return errors.New("could not connect to client")
