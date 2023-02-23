@@ -1,6 +1,7 @@
 package consumer
 
 import (
+	"math"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -8,15 +9,16 @@ import (
 
 func GenerateTimeAndTriesCondition(threshold time.Duration) func(redis.XPendingExt) bool {
 	return func(msg redis.XPendingExt) bool {
-		return (msg.RetryCount * threshold.Milliseconds()) < msg.Idle.Milliseconds()
+		v := float64(threshold.Milliseconds()) + math.Exp(float64(msg.RetryCount))
+		return v < float64(msg.Idle.Milliseconds())
 	}
 }
 
-func Filter(items []redis.XPendingExt, conndition func(item redis.XPendingExt) bool) []redis.XPendingExt {
+func Filter(items []redis.XPendingExt, condition func(item redis.XPendingExt) bool) []redis.XPendingExt {
 	filteredItems := make([]redis.XPendingExt, 0, len(items))
 
 	for _, val := range items {
-		if conndition(val) {
+		if condition(val) {
 			filteredItems = append(filteredItems, val)
 		}
 	}
