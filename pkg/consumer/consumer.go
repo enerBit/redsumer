@@ -35,17 +35,35 @@ func Consume(ctx context.Context, client *redis.Client, groupName string, consum
 
 	var messages []redis.XMessage
 
-	claimMessages, _, err := client.XAutoClaim(ctx, &redis.XAutoClaimArgs{
+	pendingMessages, err := client.XPendingExt(ctx, &redis.XPendingExtArgs{
+		Stream: streamName,
+		Group:  groupName,
+		Idle:   minIdle,
+		Start:  "-",
+		End:    "+",
+		Count:  0,
+	}).Result()
+
+	if err != nil {
+		err := fmt.Errorf("error xpending: %v", err)
+		return []redis.XMessage{}, err
+	}
+
+	condition := GenerateTimeAndTriesCondition(minIdle)
+	result := Filter(pendingMessages, condition)
+
+	ids := getIds(result)
+
+	claimMessages, err := client.XClaim(ctx, &redis.XClaimArgs{
 		Stream:   streamName,
 		Group:    groupName,
 		Consumer: consumerName,
 		MinIdle:  minIdle,
-		Count:    1000,
-		Start:    "0-0",
+		Messages: ids,
 	}).Result()
 
 	if err != nil {
-		err := fmt.Errorf("error xautoclaim: %v", err)
+		err := fmt.Errorf("error xclaim: %v", err)
 		return []redis.XMessage{}, err
 	}
 

@@ -3,6 +3,7 @@ package consumer
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/go-redis/redismock/v9"
 	"github.com/redis/go-redis/v9"
@@ -54,29 +55,55 @@ func TestWaitForStreamSuccess(t *testing.T) {
 
 func TestConsume(t *testing.T) {
 	db, mock := redismock.NewClientMock()
+	ids := []string{"1676389477-0", "1676389497-0"}
 
-	autoClaimArgs := &redis.XAutoClaimArgs{
+	claimArgs := &redis.XClaimArgs{
 		Stream:   streamName,
 		Group:    groupName,
 		Consumer: consumerName,
 		MinIdle:  minIdle,
-		Count:    1000,
-		Start:    "0-0",
+		Messages: ids,
 	}
+
 	readGroupsArgs := &redis.XReadGroupArgs{
 		Group:    groupName,
 		Consumer: consumerName,
 		Streams:  []string{streamName, ">"},
 		Count:    0,
-		Block:    0,
+		Block:    time.Millisecond * 1,
 		NoAck:    false,
 	}
 
 	data := map[string]any{"test": "test"}
 
+	resultXpending := []redis.XPendingExt{
+		{
+			ID:         "1676389477-0",
+			Consumer:   consumerName,
+			Idle:       minIdle + 1*time.Second,
+			RetryCount: 1,
+		},
+		{
+			ID:         "1676389487-0",
+			Consumer:   consumerName,
+			Idle:       minIdle,
+			RetryCount: 2,
+		},
+		{
+			ID:         "1676389497-0",
+			Consumer:   consumerName,
+			Idle:       3*minIdle + 1*time.Second,
+			RetryCount: 3,
+		},
+	}
+
 	msgA := []redis.XMessage{
 		{
-			ID:     "1676389466-0",
+			ID:     "1676389477-0",
+			Values: data,
+		},
+		{
+			ID:     "1676389497-0",
 			Values: data,
 		},
 	}
@@ -95,7 +122,17 @@ func TestConsume(t *testing.T) {
 		},
 	}
 
-	mock.ExpectXAutoClaim(autoClaimArgs).SetVal(msgA, "0-0")
+	xPendingArgs := &redis.XPendingExtArgs{
+		Stream: streamName,
+		Group:  groupName,
+		Idle:   minIdle,
+		Start:  "-",
+		End:    "+",
+		Count:  0,
+	}
+
+	mock.ExpectXPendingExt(xPendingArgs).SetVal(resultXpending)
+	mock.ExpectXClaim(claimArgs).SetVal(msgA)
 	mock.ExpectXReadGroup(readGroupsArgs).SetVal(stream)
 
 	ctx := context.Background()
@@ -105,7 +142,8 @@ func TestConsume(t *testing.T) {
 		t.Error(err)
 	}
 
-	if len(stream_result) != 2 {
+	t.Log(stream_result)
+	if len(stream_result) != 3 {
 		t.Fatalf("incomplete result set")
 	}
 
