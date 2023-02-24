@@ -2,6 +2,8 @@ package redsumer
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/enerBit/redsumer/pkg/client"
 	"github.com/enerBit/redsumer/pkg/consumer"
@@ -53,6 +55,14 @@ func (c RedConsumer) WaitForStream(ctx context.Context, tries []int) error {
 
 func (c RedConsumer) Acknowledge(ctx context.Context, ids ...string) error {
 	err := c.client.XAck(ctx, c.args.Stream, c.args.Group, ids...).Err()
+	return err
+}
+
+func (c RedConsumer) AcknowledgeDeadLetters(ctx context.Context, threshold time.Duration) error {
+
+	deadStreamName := fmt.Sprintf("dead:letters:%s", c.client)
+	err := consumer.AcknowledgeDeadLetters(ctx, c.client, c.args.Stream, deadStreamName, c.args.Group, c.args.ConsumerName, threshold)
+
 	return err
 }
 
