@@ -14,6 +14,12 @@ func GenerateTimeAndTriesCondition(threshold time.Duration) func(redis.XPendingE
 	}
 }
 
+func ToleranceCondition(threshold time.Duration) func(redis.XPendingExt) bool {
+	return func(xe redis.XPendingExt) bool {
+		return threshold < xe.Idle
+	}
+}
+
 func Filter(items []redis.XPendingExt, condition func(item redis.XPendingExt) bool) []redis.XPendingExt {
 	filteredItems := make([]redis.XPendingExt, 0, len(items))
 
