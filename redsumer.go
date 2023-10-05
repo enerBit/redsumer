@@ -7,11 +7,17 @@ import (
 
 	"github.com/enerBit/redsumer/pkg/client"
 	"github.com/enerBit/redsumer/pkg/consumer"
+	"github.com/enerBit/redsumer/pkg/producer"
 	"github.com/redis/go-redis/v9"
 )
 
 type RedConsumer struct {
 	args   RedConsumerArgs
+	client *redis.Client
+}
+
+type RedProducer struct {
+	args   RedProducerArgs
 	client *redis.Client
 }
 
@@ -22,6 +28,12 @@ type RedConsumerArgs struct {
 	RedisHost    string
 	RedisPort    int
 	Db           int
+}
+
+type RedProducerArgs struct {
+	RedisHost string
+	RedisPort int
+	Db        int
 }
 
 func NewRedisConsumer(args RedConsumerArgs) (RedConsumer, error) {
@@ -80,4 +92,24 @@ func (c RedConsumer) RawRedis() *redis.Client {
 
 func (c RedConsumer) GetArgs() RedConsumerArgs {
 	return c.args
+}
+
+func NewRedisProducer(args RedProducerArgs) (RedProducer, error) {
+
+	client, err := client.NewRedisClient(args.RedisHost, args.RedisPort, args.Db)
+
+	if err != nil {
+		return RedProducer{}, err
+	}
+
+	return RedProducer{
+		args:   args,
+		client: client,
+	}, nil
+}
+
+func (p RedProducer) Produce(streamName string, message map[string]interface{}) error {
+
+	err := producer.Produce(p.client, streamName, message)
+	return err
 }
