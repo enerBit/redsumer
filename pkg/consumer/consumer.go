@@ -3,8 +3,7 @@ package consumer
 import (
 	"context"
 	"errors"
-	"fmt"
-	"os"
+	"log"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -33,62 +32,37 @@ func WaitForStream(ctx context.Context, client *redis.Client, streamName string,
 
 func Consume(ctx context.Context, client *redis.Client, groupName string, consumerName string, streamName string) ([]redis.XMessage, error) {
 
-	var messages []redis.XMessage
-
-	pendingMessages, err := client.XPendingExt(ctx, &redis.XPendingExtArgs{
-		Stream: streamName,
-		Group:  groupName,
-		Idle:   minIdle,
-		Start:  "-",
-		End:    "+",
-		Count:  0,
-	}).Result()
-
-	if err != nil {
-		err := fmt.Errorf("error xpending: %v", err)
-		return []redis.XMessage{}, err
-	}
-
-	condition := GenerateTimeAndTriesCondition(minIdle)
-	result := Filter(pendingMessages, condition)
-
-	ids := getIds(result)
-
-	claimMessages, err := client.XClaim(ctx, &redis.XClaimArgs{
-		Stream:   streamName,
+	claimMessages, _, err := client.XAutoClaim(context.Background(), &redis.XAutoClaimArgs{
 		Group:    groupName,
 		Consumer: consumerName,
-		MinIdle:  minIdle,
-		Messages: ids,
+		Stream:   streamName,
+		MinIdle:  time.Second,
+		Count:    500,
+		Start:    "0-0",
 	}).Result()
-
 	if err != nil {
-		err := fmt.Errorf("error xclaim: %v", err)
-		return []redis.XMessage{}, err
+		log.Println("cannot get messages")
+		return claimMessages, err
 	}
 
 	if len(claimMessages) > 0 {
-		messages = append(messages, claimMessages...)
+		log.Println("claimMessages", len(claimMessages))
 	}
 
-	readMessages, err := client.XReadGroup(ctx, &redis.XReadGroupArgs{
+	entries, err := client.XReadGroup(context.Background(), &redis.XReadGroupArgs{
 		Group:    groupName,
 		Consumer: consumerName,
 		Streams:  []string{streamName, ">"},
-		Count:    0,
-		Block:    time.Millisecond * 1,
+		Count:    500,
 		NoAck:    false,
 	}).Result()
-
-	if err != nil && !os.IsTimeout(err) {
-		err := fmt.Errorf("error xreadgroup: %v", err)
-		return messages, err
+	if err != nil {
+		log.Panic(err)
 	}
-
-	if len(readMessages) > 0 {
-		newMessageList := readMessages[0].Messages
-		messages = append(messages, newMessageList...)
+	if len(entries) > 0 {
+		log.Println("new entries", len(entries))
+		newMessageList := entries[0].Messages
+		claimMessages = append(claimMessages, newMessageList...)
 	}
-
-	return messages, nil
+	return claimMessages, nil
 }
