@@ -3,7 +3,9 @@ package consumer
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -55,9 +57,11 @@ func Consume(ctx context.Context, client *redis.Client, groupName string, consum
 		Streams:  []string{streamName, ">"},
 		Count:    500,
 		NoAck:    false,
+		Block:    1,
 	}).Result()
-	if err != nil {
-		log.Panic(err)
+	if err != nil && !os.IsTimeout(err) {
+		err := fmt.Errorf("error xreadgroup: %v", err)
+		return entries[0].Messages, err
 	}
 	if len(entries) > 0 {
 		log.Println("new entries", len(entries))
