@@ -70,3 +70,40 @@ func Consume(ctx context.Context, client *redis.Client, groupName string, consum
 	}
 	return claimMessages, nil
 }
+
+func ConsumePendingOneByOne(ctx context.Context, client *redis.Client, groupName string, consumerName string, streamName string, id string) (*redis.XMessage, error) {
+
+	_, err := client.XReadGroup(context.Background(), &redis.XReadGroupArgs{
+		Group:    groupName,
+		Consumer: consumerName,
+		Streams:  []string{streamName, ">"},
+		Count:    500,
+		NoAck:    false,
+		Block:    1,
+	}).Result()
+
+	if err != nil && !os.IsTimeout(err) {
+		err := fmt.Errorf("error xreadgroup: %v", err)
+		return nil, err
+	}
+
+	entries, err := client.XReadGroup(context.Background(), &redis.XReadGroupArgs{
+		Group:    groupName,
+		Consumer: consumerName,
+		Streams:  []string{streamName, id},
+		Count:    1,
+		NoAck:    false,
+		Block:    1,
+	}).Result()
+
+	if err != nil && !os.IsTimeout(err) {
+		err := fmt.Errorf("error xreadgroup: %v", err)
+		return nil, err
+	}
+
+	if len(entries) > 0 {
+		return &entries[0].Messages[0], nil
+	}
+
+	return nil, nil
+}

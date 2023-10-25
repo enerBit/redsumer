@@ -28,6 +28,7 @@ type RedConsumerArgs struct {
 	RedisHost    string
 	RedisPort    int
 	Db           int
+	StreamIndex  *string
 }
 
 type RedProducerArgs struct {
@@ -54,6 +55,23 @@ func (c RedConsumer) Consume(ctx context.Context) ([]redis.XMessage, error) {
 
 	messages, err := consumer.Consume(ctx, c.client, c.args.Group, c.args.ConsumerName, c.args.Stream)
 	return messages, err
+}
+
+func (c RedConsumer) ConsumePendingOneByOne(ctx context.Context) (*redis.XMessage, error) {
+	if c.args.StreamIndex == nil {
+		strStreamIndex := "0-0"
+		c.args.StreamIndex = &strStreamIndex
+	}
+
+	message, err := consumer.ConsumePendingOneByOne(ctx, c.client, c.args.Group, c.args.ConsumerName, c.args.Stream, *c.args.StreamIndex)
+
+	if message != nil {
+		c.args.StreamIndex = &message.ID
+	} else {
+		c.args.StreamIndex = nil
+	}
+
+	return message, err
 }
 
 // given a list of tries([]int) this method will wait until the stream is ready
