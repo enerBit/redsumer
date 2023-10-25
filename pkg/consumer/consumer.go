@@ -101,7 +101,7 @@ func ConsumePendingOneByOne(ctx context.Context, client *redis.Client, groupName
 		return nil, err
 	}
 
-	if len(entries) > 0 {
+	if len(entries) > 0 && len(entries[0].Messages) > 0 {
 		return &entries[0].Messages[0], nil
 	}
 
