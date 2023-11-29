@@ -3,6 +3,7 @@ package redsumer
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/enerBit/redsumer/pkg/client"
@@ -57,10 +58,26 @@ func (c RedConsumer) Consume(ctx context.Context) ([]redis.XMessage, error) {
 	return messages, err
 }
 
-func (c RedConsumer) ConsumePendingOneByOne(ctx context.Context) (*redis.XMessage, error) {
+func (c *RedConsumer) ConsumePendingOneByOne(ctx context.Context) (*redis.XMessage, error) {
+
 	if c.args.StreamIndex == nil {
 		strStreamIndex := "0-0"
 		c.args.StreamIndex = &strStreamIndex
+
+		_, err := c.client.XReadGroup(context.Background(), &redis.XReadGroupArgs{
+			Group:    c.args.Group,
+			Consumer: c.args.ConsumerName,
+			Streams:  []string{c.args.Stream, ">"},
+			Count:    500,
+			NoAck:    false,
+			Block:    1,
+		}).Result()
+
+		if err != nil && !os.IsTimeout(err) {
+			err := fmt.Errorf("error xreadgroup: %v", err)
+			return nil, err
+		}
+
 	}
 
 	message, err := consumer.ConsumePendingOneByOne(ctx, c.client, c.args.Group, c.args.ConsumerName, c.args.Stream, *c.args.StreamIndex)
