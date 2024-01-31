@@ -23,13 +23,15 @@ type RedProducer struct {
 }
 
 type RedConsumerArgs struct {
-	Group        string
-	Stream       string
-	ConsumerName string
-	RedisHost    string
-	RedisPort    int
-	Db           int
-	StreamIndex  *string
+	Group             string
+	Stream            string
+	ConsumerName      string
+	RedisHost         string
+	RedisPort         int
+	Db                int
+	StreamIndex       *string
+	XAutoClaimMinIdle *time.Duration
+	XAutoClaimCount   *int
 }
 
 type RedProducerArgs struct {
@@ -44,6 +46,16 @@ func NewRedisConsumer(args RedConsumerArgs) (RedConsumer, error) {
 
 	if err != nil {
 		return RedConsumer{}, err
+	}
+
+	xAutoClaimMinIdle := 10 * time.Second
+	if args.XAutoClaimMinIdle == nil {
+		args.XAutoClaimMinIdle = &xAutoClaimMinIdle
+	}
+
+	xAutoClaimCount := 500
+	if args.XAutoClaimCount == nil {
+		args.XAutoClaimCount = &xAutoClaimCount
 	}
 
 	return RedConsumer{
@@ -63,6 +75,15 @@ func (c *RedConsumer) ConsumePendingOneByOne(ctx context.Context) (*redis.XMessa
 	if c.args.StreamIndex == nil {
 		strStreamIndex := "0-0"
 		c.args.StreamIndex = &strStreamIndex
+
+		c.client.XAutoClaim(ctx, &redis.XAutoClaimArgs{
+			Stream:   c.args.Stream,
+			Group:    c.args.Group,
+			MinIdle:  *c.args.XAutoClaimMinIdle,
+			Start:    "0-0",
+			Count:    int64(*c.args.XAutoClaimCount),
+			Consumer: c.args.ConsumerName,
+		})
 
 		_, err := c.client.XReadGroup(context.Background(), &redis.XReadGroupArgs{
 			Group:    c.args.Group,
