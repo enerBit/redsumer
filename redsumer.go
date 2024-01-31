@@ -31,6 +31,7 @@ type RedConsumerArgs struct {
 	Db                int
 	StreamIndex       *string
 	XAutoClaimMinIdle *time.Duration
+	XAutoClaimCount   *int
 }
 
 type RedProducerArgs struct {
@@ -50,6 +51,11 @@ func NewRedisConsumer(args RedConsumerArgs) (RedConsumer, error) {
 	xAutoClaimMinIdle := 10 * time.Second
 	if args.XAutoClaimMinIdle == nil {
 		args.XAutoClaimMinIdle = &xAutoClaimMinIdle
+	}
+
+	xAutoClaimCount := 500
+	if args.XAutoClaimCount == nil {
+		args.XAutoClaimCount = &xAutoClaimCount
 	}
 
 	return RedConsumer{
@@ -75,7 +81,7 @@ func (c *RedConsumer) ConsumePendingOneByOne(ctx context.Context) (*redis.XMessa
 			Group:    c.args.Group,
 			MinIdle:  *c.args.XAutoClaimMinIdle,
 			Start:    "0-0",
-			Count:    500,
+			Count:    int64(*c.args.XAutoClaimCount),
 			Consumer: c.args.ConsumerName,
 		})
 
