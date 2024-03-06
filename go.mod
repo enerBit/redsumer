@@ -1,10 +1,10 @@
-module github.com/enerBit/redsumer
+module github.com/enerBit/redsumer/v2
 
-go 1.18
+go 1.21
 
 require (
-	github.com/go-redis/redismock/v9 v9.0.2
-	github.com/redis/go-redis/v9 v9.0.2
+	github.com/go-redis/redismock/v9 v9.2.0
+	github.com/redis/go-redis/v9 v9.2.0
 )
 
 require (

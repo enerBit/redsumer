@@ -52,7 +52,6 @@ func TestFilters(t *testing.T) {
 }
 
 func TestFilterDead(t *testing.T) {
-
 	xPending := []redis.XPendingExt{
 		{
 			ID:         "1676389477-0",
