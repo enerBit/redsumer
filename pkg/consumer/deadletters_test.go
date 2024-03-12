@@ -72,7 +72,24 @@ func TestDeadLetters(t *testing.T) {
 
 	threshold := 1 * time.Hour
 
-	err := AcknowledgeDeadLetters(ctx, db, streamName, deadStreamName, groupName, consumerName, threshold)
+	consumer := &Consumer{
+		ConsumerArgs: ConsumerArgs{
+			StreamName:         streamName,
+			GroupName:          groupName,
+			ConsumerName:       consumerName,
+			BatchSize:          0,
+			ClaimBatchSize:     0,
+			PendingBatchSize:   0,
+			Block:              0,
+			MinDurationToClaim: 0,
+			IdleStillMine:      0,
+			Tries:              []int{},
+		},
+		client:                 db,
+		LatestPendingMessageId: "0-0",
+	}
+
+	err := consumer.AcknowledgeDeadLetters(ctx, deadStreamName, threshold)
 	if err != nil {
 		t.Errorf("Error while acknowledge messages: %v", err)
 	}

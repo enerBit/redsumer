@@ -7,17 +7,17 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-func AcknowledgeDeadLetters(ctx context.Context, client *redis.Client, streamName, deadStreamName, groupName, consumerName string, threshold time.Duration) error {
+const minIdle time.Duration = time.Millisecond * 10000
 
-	pendingMessage, err := client.XPendingExt(ctx, &redis.XPendingExtArgs{
-		Stream: streamName,
-		Group:  groupName,
+func (c *Consumer) AcknowledgeDeadLetters(ctx context.Context, deadStreamName string, threshold time.Duration) error {
+	pendingMessage, err := c.client.XPendingExt(ctx, &redis.XPendingExtArgs{
+		Stream: c.ConsumerArgs.StreamName,
+		Group:  c.ConsumerArgs.GroupName,
 		Idle:   minIdle,
 		Start:  "-",
 		End:    "+",
 		Count:  0,
 	}).Result()
-
 	if err != nil {
 		return err
 	}
@@ -26,31 +26,28 @@ func AcknowledgeDeadLetters(ctx context.Context, client *redis.Client, streamNam
 	deadLetters := Filter(pendingMessage, condition)
 	ids := getIds(deadLetters)
 
-	claimedMessages, err := client.XClaim(ctx, &redis.XClaimArgs{
-		Stream:   streamName,
-		Group:    groupName,
-		Consumer: consumerName,
+	claimedMessages, err := c.client.XClaim(ctx, &redis.XClaimArgs{
+		Stream:   c.ConsumerArgs.StreamName,
+		Group:    c.ConsumerArgs.GroupName,
+		Consumer: c.ConsumerArgs.ConsumerName,
 		MinIdle:  minIdle,
 		Messages: ids,
 	}).Result()
-
 	if err != nil {
 		return err
 	}
 
 	for _, val := range claimedMessages {
-
-		_, err := client.XAdd(ctx, &redis.XAddArgs{
+		_, err := c.client.XAdd(ctx, &redis.XAddArgs{
 			Stream: deadStreamName,
 			MaxLen: 0,
 			Values: val.Values,
 		}).Result()
-
 		if err != nil {
 			return err
 		}
 
-		_, err = client.XAck(ctx, streamName, groupName, val.ID).Result()
+		err = c.Ack(ctx, val.ID)
 		if err != nil {
 			return err
 		}
