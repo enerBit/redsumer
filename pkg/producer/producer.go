@@ -3,7 +3,7 @@ package producer
 import (
 	"context"
 
-	"github.com/enerBit/redsumer/v2/pkg/client"
+	"github.com/enerBit/redsumer/pkg/client"
 	"github.com/redis/go-redis/v9"
 )
 

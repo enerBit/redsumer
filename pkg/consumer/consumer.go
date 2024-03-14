@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/enerBit/redsumer/v2/pkg/client"
+	"github.com/enerBit/redsumer/pkg/client"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -15,8 +15,8 @@ type ConsumerArgs struct {
 	GroupName          string
 	ConsumerName       string
 	BatchSize          int64
-	ClaimBatchSize     int64
-	PendingBatchSize   int64
+	ClaimBatchSize     *int64
+	PendingBatchSize   *int64
 	Block              time.Duration
 	MinDurationToClaim time.Duration
 	IdleStillMine      time.Duration
@@ -164,7 +164,7 @@ func (c *Consumer) pendingMessages(ctx context.Context) ([]redis.XMessage, error
 		Group:    c.ConsumerArgs.GroupName,
 		Consumer: c.ConsumerArgs.ConsumerName,
 		Streams:  []string{c.ConsumerArgs.StreamName, c.LatestPendingMessageId},
-		Count:    c.ConsumerArgs.PendingBatchSize,
+		Count:    *c.ConsumerArgs.PendingBatchSize,
 		Block:    c.ConsumerArgs.Block,
 		NoAck:    true,
 	}).Result()
@@ -202,7 +202,7 @@ func (c *Consumer) claimedMessages(ctx context.Context) ([]redis.XMessage, error
 		Consumer: c.ConsumerArgs.ConsumerName,
 		MinIdle:  c.ConsumerArgs.MinDurationToClaim,
 		Start:    FIRST_ID_INSIDE_THE_STREAM,
-		Count:    c.ConsumerArgs.ClaimBatchSize,
+		Count:    *c.ConsumerArgs.ClaimBatchSize,
 	}).Result()
 	if err != nil && err != redis.Nil {
 		return nil, err
@@ -233,19 +233,23 @@ func (c *Consumer) Consume(ctx context.Context) ([]redis.XMessage, error) {
 	if len(messages) > 0 {
 		return messages, nil
 	}
-	messages, err = c.pendingMessages(ctx)
-	if err != nil {
-		return nil, c.validateError(ctx, err)
+	if c.ConsumerArgs.PendingBatchSize != nil {
+		messages, err = c.pendingMessages(ctx)
+		if err != nil {
+			return nil, c.validateError(ctx, err)
+		}
+		if len(messages) > 0 {
+			return messages, nil
+		}
 	}
-	if len(messages) > 0 {
-		return messages, nil
-	}
-	messages, err = c.claimedMessages(ctx)
-	if err != nil {
-		return nil, c.validateError(ctx, err)
-	}
-	if len(messages) > 0 {
-		return messages, nil
+	if c.ConsumerArgs.ClaimBatchSize == nil {
+		messages, err = c.claimedMessages(ctx)
+		if err != nil {
+			return nil, c.validateError(ctx, err)
+		}
+		if len(messages) > 0 {
+			return messages, nil
+		}
 	}
 	return nil, nil
 }

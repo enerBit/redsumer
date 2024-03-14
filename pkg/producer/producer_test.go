@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/enerBit/redsumer/v2/pkg/client"
+	"github.com/enerBit/redsumer/pkg/client"
 	"github.com/go-redis/redismock/v9"
 	"github.com/redis/go-redis/v9"
 )
