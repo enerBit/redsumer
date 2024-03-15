@@ -3,6 +3,7 @@ package consumer
 import (
 	"context"
 	"errors"
+	"log"
 	"strings"
 	"time"
 
@@ -45,6 +46,7 @@ const (
 // If any error occurs during the process, it returns nil and the error.
 // Otherwise, it returns the created Consumer instance and nil error.
 func NewConsumer(ctx context.Context, redisArgs client.RedisArgs, consumerArgs ConsumerArgs) (*Consumer, error) {
+	log.Println("Creating new consumer")
 	redisClient, err := redisArgs.NewRedisClient(ctx)
 	if err != nil {
 		return nil, err
@@ -69,6 +71,7 @@ func NewConsumer(ctx context.Context, redisArgs client.RedisArgs, consumerArgs C
 // If the group already exists, it returns without an error.
 // If any error occurs during the process, it is returned.
 func (c *Consumer) createGroup(ctx context.Context) error {
+	log.Println("Creating consumer group", c.ConsumerArgs.GroupName)
 	err := c.waitForStream(ctx)
 	if err != nil {
 		return err
@@ -86,6 +89,7 @@ func (c *Consumer) createGroup(ctx context.Context) error {
 // It retries for the specified number of times with a delay between each attempt.
 // If the stream is ready, it returns nil. Otherwise, it returns an error.
 func (c *Consumer) waitForStream(ctx context.Context) error {
+	log.Println("Waiting for stream to be ready")
 	for _, waittime := range c.ConsumerArgs.Tries {
 		time.Sleep(time.Second * time.Duration(waittime))
 		streamReady, err := c.client.Exists(ctx, c.ConsumerArgs.StreamName).Result()
@@ -104,6 +108,7 @@ func (c *Consumer) waitForStream(ctx context.Context) error {
 // It returns true if the message is still pending, otherwise false.
 // If there is an error while checking, it returns the error.
 func (c *Consumer) StillMine(ctx context.Context, messageId string) (bool, error) {
+	log.Println("Checking if message", messageId, "is still pending")
 	pending, err := c.client.XPendingExt(ctx, &redis.XPendingExtArgs{
 		Stream:   c.ConsumerArgs.StreamName,
 		Group:    c.ConsumerArgs.GroupName,
@@ -123,6 +128,7 @@ func (c *Consumer) StillMine(ctx context.Context, messageId string) (bool, error
 // Ack acknowledges a message with the given message ID in the consumer group.
 // It returns an error if there was a problem acknowledging the message.
 func (c *Consumer) Ack(ctx context.Context, messageId string) error {
+	log.Println("Acknowledging message", messageId)
 	_, err := c.client.XAck(ctx, c.ConsumerArgs.StreamName, c.ConsumerArgs.GroupName, messageId).Result()
 	if err != nil {
 		return err
@@ -136,6 +142,7 @@ func (c *Consumer) Ack(ctx context.Context, messageId string) error {
 // The function returns a slice of redis.XMessage, which contains the retrieved messages,
 // and an error if any occurred during the retrieval process.
 func (c *Consumer) newMessages(ctx context.Context) ([]redis.XMessage, error) {
+	log.Println("Retrieving new messages")
 	resp, err := c.client.XReadGroup(ctx, &redis.XReadGroupArgs{
 		Group:    c.ConsumerArgs.GroupName,
 		Consumer: c.ConsumerArgs.ConsumerName,
@@ -160,13 +167,14 @@ func (c *Consumer) newMessages(ctx context.Context) ([]redis.XMessage, error) {
 // pendingMessages retrieves pending messages from a Redis stream.
 // It returns a slice of redis.XMessage representing the pending messages and an error if any.
 func (c *Consumer) pendingMessages(ctx context.Context) ([]redis.XMessage, error) {
+	log.Println("Retrieving pending messages")
 	resp, err := c.client.XReadGroup(ctx, &redis.XReadGroupArgs{
 		Group:    c.ConsumerArgs.GroupName,
 		Consumer: c.ConsumerArgs.ConsumerName,
 		Streams:  []string{c.ConsumerArgs.StreamName, c.LatestPendingMessageId},
 		Count:    *c.ConsumerArgs.PendingBatchSize,
 		Block:    c.ConsumerArgs.Block,
-		NoAck:    true,
+		NoAck:    false,
 	}).Result()
 	if err != nil && err != redis.Nil {
 		return nil, err
@@ -196,6 +204,7 @@ func (c *Consumer) pendingMessages(ctx context.Context) ([]redis.XMessage, error
 // If the error is not equal to the REDIS_NIL error, it is returned as is.
 // Otherwise, the claimed messages are returned along with a nil error.
 func (c *Consumer) claimedMessages(ctx context.Context) ([]redis.XMessage, error) {
+	log.Println("Retrieving claimed messages")
 	messages, _, err := c.client.XAutoClaim(ctx, &redis.XAutoClaimArgs{
 		Stream:   c.ConsumerArgs.StreamName,
 		Group:    c.ConsumerArgs.GroupName,
@@ -215,6 +224,7 @@ func (c *Consumer) claimedMessages(ctx context.Context) ([]redis.XMessage, error
 // If the error message contains NOGROUP, it calls the createGroup method to create a group.
 // Otherwise, it returns the original error.
 func (c *Consumer) validateError(ctx context.Context, err error) error {
+	log.Println("Validating error", err)
 	if strings.Contains(err.Error(), NOGROUP) {
 		return c.createGroup(ctx)
 	}
@@ -226,6 +236,7 @@ func (c *Consumer) validateError(ctx context.Context, err error) error {
 // If any messages are found, they are returned along with a nil error.
 // If no messages are found, it returns nil and nil error.
 func (c *Consumer) Consume(ctx context.Context) ([]redis.XMessage, error) {
+	log.Println("Processing new messages")
 	messages, err := c.newMessages(ctx)
 	if err != nil {
 		return nil, c.validateError(ctx, err)
@@ -233,6 +244,7 @@ func (c *Consumer) Consume(ctx context.Context) ([]redis.XMessage, error) {
 	if len(messages) > 0 {
 		return messages, nil
 	}
+	log.Println("Processing pending messages")
 	if c.ConsumerArgs.PendingBatchSize != nil {
 		messages, err = c.pendingMessages(ctx)
 		if err != nil {
@@ -242,7 +254,8 @@ func (c *Consumer) Consume(ctx context.Context) ([]redis.XMessage, error) {
 			return messages, nil
 		}
 	}
-	if c.ConsumerArgs.ClaimBatchSize == nil {
+	log.Println("Processing claimed messages")
+	if c.ConsumerArgs.ClaimBatchSize != nil {
 		messages, err = c.claimedMessages(ctx)
 		if err != nil {
 			return nil, c.validateError(ctx, err)
