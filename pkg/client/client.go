@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -19,6 +20,7 @@ type RedisArgs struct {
 // It then sends a PING command to the Redis server to check the connection.
 // The function returns the Redis client and any error encountered during the PING command.
 func (r RedisArgs) NewRedisClient(ctx context.Context) (*redis.Client, error) {
+	log.Println("Creating new Redis client")
 	redisAdress := fmt.Sprintf("%s:%d", r.RedisHost, r.RedisPort)
 
 	redisClient := redis.NewClient(&redis.Options{
