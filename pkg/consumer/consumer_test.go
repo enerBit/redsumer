@@ -3,6 +3,7 @@ package consumer
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -498,7 +499,7 @@ func TestPendingMessagesSuccess(t *testing.T) {
 		Streams:  []string{streamName, "0-0"},
 		Count:    pendingBatchSize,
 		Block:    block,
-		NoAck:    true,
+		NoAck:    false,
 	}
 
 	data := map[string]any{"test": "test"}
@@ -558,7 +559,7 @@ func TestPendingMessagesSuccess(t *testing.T) {
 	}
 
 	if len(msgs) != 5 {
-		t.Fatalf("incomplete result set")
+		t.Fatalf(fmt.Sprint("incomplete result set ", len(msgs)))
 	}
 
 	if err := mock.ExpectationsWereMet(); err != nil {
@@ -578,7 +579,7 @@ func TestPendingMessagesError(t *testing.T) {
 		Streams:  []string{streamName, "0-0"},
 		Count:    pendingBatchSize,
 		Block:    block,
-		NoAck:    true,
+		NoAck:    false,
 	}
 
 	mock.ExpectXReadGroup(xReadGroupArgs).SetErr(errors.New("error"))
