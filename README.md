@@ -119,7 +119,7 @@ func main() {
 	}
     // Producer configuration
 	producerArgs := producer.ProducerArgs{StreamName: "stream_name"}
-    ctx := context.Background()-
+    ctx := context.Background()
     // Create a new producer
 	producer, err := producer.NewProducer(ctx, redisArgs, producerArgs)
 	if err != nil {
