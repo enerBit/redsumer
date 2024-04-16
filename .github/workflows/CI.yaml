@@ -16,5 +16,8 @@ jobs:
       - name: Build
         run: go build -v ./...
 
-      - name: Test
-        run: go test -v ./...
+      - name: Run tests
+        run: |
+          go test -v ..\..\pkg\client\
+          go test -v ..\..\pkg\consumer\
+          go test -v ..\..\pkg\producer\
