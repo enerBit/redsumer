@@ -29,6 +29,7 @@ type Consumer struct {
 	RedisArgs              client.RedisArgs
 	client                 *redis.Client
 	LatestPendingMessageId string
+	NextIdAutoClaim        string
 }
 
 const (
@@ -56,6 +57,7 @@ func NewConsumer(ctx context.Context, redisArgs client.RedisArgs, consumerArgs C
 		ConsumerArgs:           consumerArgs,
 		client:                 redisClient,
 		LatestPendingMessageId: FIRST_ID_INSIDE_THE_STREAM,
+		NextIdAutoClaim:        FIRST_ID_INSIDE_THE_STREAM,
 	}
 
 	err = consumer.createGroup(ctx)
@@ -205,17 +207,22 @@ func (c *Consumer) pendingMessages(ctx context.Context) ([]redis.XMessage, error
 // Otherwise, the claimed messages are returned along with a nil error.
 func (c *Consumer) claimedMessages(ctx context.Context) ([]redis.XMessage, error) {
 	log.Println("Retrieving claimed messages")
-	messages, _, err := c.client.XAutoClaim(ctx, &redis.XAutoClaimArgs{
+	messages, nextStart, err := c.client.XAutoClaim(ctx, &redis.XAutoClaimArgs{
 		Stream:   c.ConsumerArgs.StreamName,
 		Group:    c.ConsumerArgs.GroupName,
 		Consumer: c.ConsumerArgs.ConsumerName,
 		MinIdle:  c.ConsumerArgs.MinDurationToClaim,
-		Start:    FIRST_ID_INSIDE_THE_STREAM,
+		Start:    c.NextIdAutoClaim,
 		Count:    *c.ConsumerArgs.ClaimBatchSize,
 	}).Result()
 	if err != nil && err != redis.Nil {
+		log.Print("Error while claiming messages", err.Error())
+		log.Print("Resetting NextIdAutoClaim to", FIRST_ID_INSIDE_THE_STREAM)
+		c.NextIdAutoClaim = FIRST_ID_INSIDE_THE_STREAM
 		return nil, err
 	}
+
+	c.NextIdAutoClaim = nextStart
 
 	return messages, nil
 }
@@ -236,6 +243,8 @@ func (c *Consumer) validateError(ctx context.Context, err error) error {
 // If any messages are found, they are returned along with a nil error.
 // If no messages are found, it returns nil and nil error.
 func (c *Consumer) Consume(ctx context.Context) ([]redis.XMessage, error) {
+	log.Println("Consume messages pass")
+
 	log.Println("Processing new messages")
 	messages, err := c.newMessages(ctx)
 	if err != nil {
@@ -244,8 +253,9 @@ func (c *Consumer) Consume(ctx context.Context) ([]redis.XMessage, error) {
 	if len(messages) > 0 {
 		return messages, nil
 	}
-	log.Println("Processing pending messages")
+
 	if c.ConsumerArgs.PendingBatchSize != nil {
+		log.Println("Processing pending messages")
 		messages, err = c.pendingMessages(ctx)
 		if err != nil {
 			return nil, c.validateError(ctx, err)
@@ -254,8 +264,9 @@ func (c *Consumer) Consume(ctx context.Context) ([]redis.XMessage, error) {
 			return messages, nil
 		}
 	}
-	log.Println("Processing claimed messages")
+
 	if c.ConsumerArgs.ClaimBatchSize != nil {
+		log.Println("Processing claimed messages")
 		messages, err = c.claimedMessages(ctx)
 		if err != nil {
 			return nil, c.validateError(ctx, err)
