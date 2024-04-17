@@ -3,6 +3,7 @@ package consumer
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"strings"
 	"time"
@@ -131,9 +132,12 @@ func (c *Consumer) StillMine(ctx context.Context, messageId string) (bool, error
 // It returns an error if there was a problem acknowledging the message.
 func (c *Consumer) Ack(ctx context.Context, messageId string) error {
 	log.Println("Acknowledging message", messageId)
-	_, err := c.client.XAck(ctx, c.ConsumerArgs.StreamName, c.ConsumerArgs.GroupName, messageId).Result()
+	ackedMessages, err := c.client.XAck(ctx, c.ConsumerArgs.StreamName, c.ConsumerArgs.GroupName, messageId).Result()
 	if err != nil {
 		return err
+	}
+	if ackedMessages == 0 {
+		return fmt.Errorf("failed to acknowledge message %s. Stream: %s Group consumer: %s", messageId, c.ConsumerArgs.StreamName, c.ConsumerArgs.GroupName)
 	}
 	return nil
 }
