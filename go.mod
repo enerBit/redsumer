@@ -1,13 +1,11 @@
-module github.com/enerBit/redsumer
+module github.com/enerBit/redsumer/v3
 
-go 1.21
-
-require (
-	github.com/go-redis/redismock/v9 v9.2.0
-	github.com/redis/go-redis/v9 v9.2.0
-)
+go 1.22.7
 
 require (
-	github.com/cespare/xxhash/v2 v2.2.0 // indirect
-	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
+	github.com/valkey-io/valkey-go v1.0.45
+	github.com/valkey-io/valkey-go/mock v1.0.45
+	go.uber.org/mock v0.4.0
 )
+
+require golang.org/x/sys v0.24.0 // indirect

@@ -31,8 +31,8 @@ import (
     "fmt"
     "time"
 
-    "github.com/enerBit/redsumer/pkg/client"
-    "github.com/enerBit/redsumer/pkg/consumer"
+    "github.com/enerBit/redsumer/v3/pkg/client"
+    "github.com/enerBit/redsumer/v3/pkg/consumer"
 )
 
 func main() {
@@ -107,7 +107,7 @@ import (
 	"context"
 	"time"
 
-    "github.com/enerBit/redsumer/pkg/producer"
+    "github.com/enerBit/redsumer/v3/pkg/producer"
 )
 
 func main() {
