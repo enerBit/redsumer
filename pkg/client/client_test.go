@@ -18,4 +18,3 @@ func TestNewRedisClient(t *testing.T) {
 		t.Errorf("Error: %v", err)
 	}
 }
-
