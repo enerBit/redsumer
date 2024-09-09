@@ -18,5 +18,7 @@ jobs:
 
       - name: Run tests
         run: |
+          go get -t ..\..\pkg\consumer\
+          go get -t ..\..\pkg\producer\
           go test -v ..\..\pkg\consumer\
           go test -v ..\..\pkg\producer\
