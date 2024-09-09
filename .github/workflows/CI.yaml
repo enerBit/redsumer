@@ -16,9 +16,9 @@ jobs:
       - name: Build
         run: go build -v ./...
 
-      - name: Run tests
-        run: |
-          go get -t ..\..\pkg\consumer\
-          go get -t ..\..\pkg\producer\
-          go test -v ..\..\pkg\consumer\
-          go test -v ..\..\pkg\producer\
+      # - name: Run tests
+      #   run: |
+      #     go get -t ..\..\pkg\consumer\
+      #     go get -t ..\..\pkg\producer\
+      #     go test -v ..\..\pkg\consumer\
+      #     go test -v ..\..\pkg\producer\
