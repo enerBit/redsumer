@@ -16,5 +16,6 @@ require (
 	github.com/pkg/diff v0.0.0-20210226163009-20ebb0f2a09e // indirect
 	github.com/rogpeppe/go-internal v1.9.0 // indirect
 	github.com/yuin/goldmark v1.4.13 // indirect
+	golang.org/x/mod v0.11.0 // indirect
 	golang.org/x/sys v0.24.0 // indirect
 )
