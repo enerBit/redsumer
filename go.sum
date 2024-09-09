@@ -20,6 +20,8 @@ github.com/valkey-io/valkey-go v1.0.45 h1:d2ksu+FvKEy9pU9CCMZ94ABTLm2kNHU0jxEJZR
 github.com/valkey-io/valkey-go v1.0.45/go.mod h1:BXlVAPIL9rFQinSFM+N32JfWzfCaUAqBpZkc4vPY6fM=
 github.com/valkey-io/valkey-go/mock v1.0.45 h1:jHqf5ItZwIJQi2iX1hsTQlKOJ/WtEe59sipg7VGo8UU=
 github.com/valkey-io/valkey-go/mock v1.0.45/go.mod h1:v0H4l0bEIBy3FpMcYQR+a4gYViNJavRKJNRd0en/4lM=
+github.com/yuin/goldmark v1.4.13 h1:fVcFKWvrslecOb/tg+Cc05dkeYx540o0FuFt3nUVDoE=
+github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
 go.uber.org/mock v0.4.0 h1:VcM4ZOtdbR4f6VXfiOpwpVJDL6lCReaZ6mw31wqh7KU=
 go.uber.org/mock v0.4.0/go.mod h1:a6FSlNadKUHUa9IP5Vyt1zh4fC7uAwxMutEAscFbkZc=
 golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56 h1:2dVuKD2vS7b0QIHQbpyTISPd0LeHDbnYEryqj5Q1ug8=
