@@ -1,6 +1,6 @@
 module github.com/enerBit/redsumer/v3
 
-go 1.21
+go 1.22.7
 
 require (
 	github.com/valkey-io/valkey-go v1.0.45
