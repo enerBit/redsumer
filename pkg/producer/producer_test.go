@@ -4,61 +4,60 @@ import (
 	"context"
 	"testing"
 
-	"github.com/enerBit/redsumer/pkg/client"
-	"github.com/go-redis/redismock/v9"
-	"github.com/redis/go-redis/v9"
+	"github.com/enerBit/redsumer/v3/pkg/client"
+	"github.com/valkey-io/valkey-go/mock"
+	"go.uber.org/mock/gomock"
+)
+
+const (
+	streamName   string = "stream-test"
+	groupName    string = "group-test"
+	consumerName string = "consumer-test"
 )
 
 func TestProduceSuccess(t *testing.T) {
-	db, mock := redismock.NewClientMock()
-	defer db.Close()
-	producer := Producer{
-		Client: db,
-		RedisArgs: client.RedisArgs{
-			RedisHost: "localhost",
-			RedisPort: 6379,
-			Db:        0,
-		},
-		ProducerArgs: ProducerArgs{
-			StreamName: "testStream",
-		},
-	}
-	message := map[string]interface{}{
-		"key": "value",
-	}
-	mock.ExpectXAdd(&redis.XAddArgs{Stream: producer.ProducerArgs.StreamName, MaxLen: 0, Values: message}).SetVal("1")
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
 	ctx := context.Background()
-	err := producer.Produce(ctx, message)
+	db := mock.NewClient(ctrl)
+
+	message := map[string]string{
+		"key": "value",
+	}
+
+	db.EXPECT().Do(ctx, mock.Match("XADD", streamName, "*", "key", "value")).Return(mock.ErrorResult(nil))
+	clientArg := &client.ClientArgs{
+		Instance: db,
+	}
+	p := Producer{
+		Client: clientArg,
+	}
+	err := p.Produce(ctx, message, streamName)
 	if err != nil {
-		t.Error(err)
+		t.Fatalf("expected nil error, got %v", err)
 	}
 }
 func TestProduceError(t *testing.T) {
-	db, mock := redismock.NewClientMock()
-	defer db.Close()
-	producer := Producer{
-		Client: db,
-		RedisArgs: client.RedisArgs{
-			RedisHost: "localhost",
-			RedisPort: 6379,
-			Db:        0,
-		},
-		ProducerArgs: ProducerArgs{
-			StreamName: "testStream",
-		},
-	}
-	message := map[string]interface{}{
-		"key": "value",
-	}
-	mock.ExpectXAdd(&redis.XAddArgs{Stream: producer.ProducerArgs.StreamName, MaxLen: 0, Values: message}).RedisNil()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
 	ctx := context.Background()
-	err := producer.Produce(ctx, message)
-	if err == nil {
-		t.Error("Expected error, got nil")
+	db := mock.NewClient(ctrl)
+
+	message := map[string]string{
+		"key": "value",
 	}
-	if err != redis.Nil {
-		t.Error(err)
+
+	db.EXPECT().Do(ctx, mock.Match("XADD", streamName, "*", "key", "value")).Return(mock.Result(mock.ValkeyError("error")))
+	clientArg := &client.ClientArgs{
+		Instance: db,
+	}
+	p := Producer{
+		Client: clientArg,
+	}
+	err := p.Produce(ctx, message, streamName)
+	if err == nil {
+		t.Fatalf("expected error, got nil")
 	}
 }

@@ -3,32 +3,40 @@ package client
 import (
 	"context"
 	"fmt"
-	"log"
+	"sync"
 
-	"github.com/redis/go-redis/v9"
+	"github.com/valkey-io/valkey-go"
 )
 
-type RedisArgs struct {
-	RedisHost string
-	RedisPort int
-	Db        int
+type ClientArgs struct {
+	Host     string
+	Port     string
+	Instance valkey.Client
 }
 
-// newRedisClient creates a new Redis client and returns it along with any error encountered.
-// It takes a context.Context as input and uses the RedisArgs receiver to access the RedisHost, RedisPort, and Db fields.
-// The Redis client is created with the specified Redis address and database number.
-// It then sends a PING command to the Redis server to check the connection.
-// The function returns the Redis client and any error encountered during the PING command.
-func (r RedisArgs) NewRedisClient(ctx context.Context) (*redis.Client, error) {
-	log.Println("Creating new Redis client")
-	redisAdress := fmt.Sprintf("%s:%d", r.RedisHost, r.RedisPort)
+var once sync.Once
 
-	redisClient := redis.NewClient(&redis.Options{
-		Addr: redisAdress,
-		DB:   r.Db,
+// newValkeyClient creates a new Valkey client and returns it along with any error encountered.
+// It takes a context.Context as input and uses the ClientArgs receiver to access the Host and Port fields.
+// The Valkey client is created with the specified Valkey address.
+// It then sends a PING command to the Valkey server to check the connection.
+// The function returns the Valkey client and any error encountered during the PING command.
+func (r *ClientArgs) InitClient(ctx context.Context) error {
+	redisAdress := fmt.Sprintf("%s:%s", r.Host, r.Port)
+
+	client, err := valkey.NewClient(valkey.ClientOption{InitAddress: []string{redisAdress}})
+	if err != nil {
+		return err
+	}
+
+	err = client.Do(ctx, client.B().Ping().Build()).Error()
+	if err != nil {
+		return err
+	}
+
+	once.Do(func() {
+		r.Instance = client
 	})
 
-	_, err := redisClient.Ping(ctx).Result()
-
-	return redisClient, err
+	return nil
 }

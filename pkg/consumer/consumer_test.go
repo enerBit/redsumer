@@ -2,13 +2,13 @@ package consumer
 
 import (
 	"context"
-	"errors"
-	"fmt"
+	"strconv"
 	"testing"
-	"time"
 
-	"github.com/go-redis/redismock/v9"
-	"github.com/redis/go-redis/v9"
+	"github.com/enerBit/redsumer/v3/pkg/client"
+	"github.com/valkey-io/valkey-go"
+	"github.com/valkey-io/valkey-go/mock"
+	"go.uber.org/mock/gomock"
 )
 
 const (
@@ -18,700 +18,447 @@ const (
 )
 
 func TestCreateGroupSuccess(t *testing.T) {
-	db, mock := redismock.NewClientMock()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	mock.ExpectExists(streamName).SetVal(1)
-	mock.ExpectXGroupCreate(streamName, groupName, FIRST_ID_INSIDE_THE_STREAM).SetVal("OK")
+	ctx := context.Background()
+	db := mock.NewClient(ctrl)
 
-	consumer := &Consumer{
-		ConsumerArgs: ConsumerArgs{
-			StreamName:         streamName,
-			GroupName:          groupName,
-			ConsumerName:       consumerName,
-			BatchSize:          0,
-			ClaimBatchSize:     nil,
-			PendingBatchSize:   nil,
-			Block:              0,
-			MinDurationToClaim: 0,
-			IdleStillMine:      0,
-			Tries:              []int{1},
-		},
-		client:                 db,
-		LatestPendingMessageId: "0-0",
+	db.EXPECT().Do(ctx, mock.Match("EXISTS", streamName)).Return(mock.Result(mock.ValkeyInt64(1)))
+	db.EXPECT().Do(ctx, mock.Match("XGROUP", "CREATE", streamName, groupName, consumer_INITIAL_STREAM_ID)).Return(mock.ErrorResult(nil))
+
+	clientArg := &client.ClientArgs{
+		Instance: db,
+	}
+	c := &Consumer{
+		Client:       clientArg,
+		StreamName:   streamName,
+		GroupName:    groupName,
+		ConsumerName: consumerName,
+		Tries:        []int{1},
 	}
 
-	err := consumer.createGroup(context.Background())
+	err := c.initGroup(ctx)
 	if err != nil {
-		t.Error(err)
+		t.Fatalf("expected nil error, got %v", err)
+	}
+}
+
+func TestCreateGroupErrorBusyGroup(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := context.Background()
+	db := mock.NewClient(ctrl)
+
+	db.EXPECT().Do(ctx, mock.Match("EXISTS", streamName)).Return(mock.Result(mock.ValkeyInt64(1)))
+	db.EXPECT().Do(ctx, mock.Match("XGROUP", "CREATE", streamName, groupName, consumer_INITIAL_STREAM_ID)).Return(mock.Result(mock.ValkeyError("BUSYGROUP Consumer Group name already exists")))
+
+	clientArg := &client.ClientArgs{
+		Instance: db,
+	}
+	c := &Consumer{
+		Client:       clientArg,
+		StreamName:   streamName,
+		GroupName:    groupName,
+		ConsumerName: consumerName,
+		Tries:        []int{1},
 	}
 
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
+	err := c.initGroup(ctx)
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
 	}
 }
 
 func TestCreateGroupError(t *testing.T) {
-	db, mock := redismock.NewClientMock()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	mock.ExpectExists(streamName).SetVal(1)
-	mock.ExpectXGroupCreate(streamName, groupName, FIRST_ID_INSIDE_THE_STREAM).SetErr(errors.New("error"))
+	ctx := context.Background()
+	db := mock.NewClient(ctrl)
 
-	consumer := &Consumer{
-		ConsumerArgs: ConsumerArgs{
-			StreamName:         streamName,
-			GroupName:          groupName,
-			ConsumerName:       consumerName,
-			BatchSize:          0,
-			ClaimBatchSize:     nil,
-			PendingBatchSize:   nil,
-			Block:              0,
-			MinDurationToClaim: 0,
-			IdleStillMine:      0,
-			Tries:              []int{1},
-		},
-		client:                 db,
-		LatestPendingMessageId: "0-0",
+	db.EXPECT().Do(ctx, mock.Match("EXISTS", streamName)).Return(mock.Result(mock.ValkeyInt64(1)))
+	db.EXPECT().Do(ctx, mock.Match("XGROUP", "CREATE", streamName, groupName, consumer_INITIAL_STREAM_ID)).Return(mock.Result(mock.ValkeyError("error")))
+
+	clientArg := &client.ClientArgs{
+		Instance: db,
+	}
+	c := &Consumer{
+		Client:       clientArg,
+		StreamName:   streamName,
+		GroupName:    groupName,
+		ConsumerName: consumerName,
+		Tries:        []int{1},
 	}
 
-	err := consumer.createGroup(context.Background())
+	err := c.initGroup(ctx)
 	if err == nil {
-		t.Error("should no connect")
-	}
-
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
+		t.Fatalf("expected error, got nil")
 	}
 }
 
 func TestWaitForStreamSuccess(t *testing.T) {
-	db, mock := redismock.NewClientMock()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	mock.ExpectExists(streamName).SetVal(0)
-	mock.ExpectExists(streamName).SetVal(0)
-	mock.ExpectExists(streamName).SetVal(0)
-	mock.ExpectExists(streamName).SetVal(1)
+	ctx := context.Background()
+	db := mock.NewClient(ctrl)
 
-	consumer := &Consumer{
-		ConsumerArgs: ConsumerArgs{
-			StreamName:         streamName,
-			GroupName:          groupName,
-			ConsumerName:       consumerName,
-			BatchSize:          0,
-			ClaimBatchSize:     nil,
-			PendingBatchSize:   nil,
-			Block:              0,
-			MinDurationToClaim: 0,
-			IdleStillMine:      0,
-			Tries:              []int{1, 2, 3, 4},
-		},
-		client:                 db,
-		LatestPendingMessageId: "0-0",
+	db.EXPECT().Do(ctx, mock.Match("EXISTS", streamName)).Return(mock.Result(mock.ValkeyInt64(0)))
+	db.EXPECT().Do(ctx, mock.Match("EXISTS", streamName)).Return(mock.Result(mock.ValkeyInt64(0)))
+	db.EXPECT().Do(ctx, mock.Match("EXISTS", streamName)).Return(mock.Result(mock.ValkeyInt64(0)))
+	db.EXPECT().Do(ctx, mock.Match("EXISTS", streamName)).Return(mock.Result(mock.ValkeyInt64(1)))
+
+	clientArg := &client.ClientArgs{
+		Instance: db,
+	}
+	c := &Consumer{
+		Client:       clientArg,
+		StreamName:   streamName,
+		GroupName:    groupName,
+		ConsumerName: consumerName,
+		Tries:        []int{1, 2, 3, 4},
 	}
 
-	err := consumer.waitForStream(context.Background())
+	err := c.waitForStream(ctx)
 	if err != nil {
-		t.Error(err)
-	}
-
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
+		t.Fatalf("expected nil error, got %v", err)
 	}
 }
 
 func TestWaitForStreamError(t *testing.T) {
-	db, mock := redismock.NewClientMock()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	mock.ExpectExists(streamName).SetVal(0)
-	mock.ExpectExists(streamName).SetVal(0)
-	mock.ExpectExists(streamName).SetVal(0)
-	mock.ExpectExists(streamName).SetVal(0)
+	ctx := context.Background()
+	db := mock.NewClient(ctrl)
 
-	consumer := &Consumer{
-		ConsumerArgs: ConsumerArgs{
-			StreamName:         streamName,
-			GroupName:          groupName,
-			ConsumerName:       consumerName,
-			BatchSize:          0,
-			ClaimBatchSize:     nil,
-			PendingBatchSize:   nil,
-			Block:              0,
-			MinDurationToClaim: 0,
-			IdleStillMine:      0,
-			Tries:              []int{1, 2, 3, 4},
-		},
-		client:                 db,
-		LatestPendingMessageId: "0-0",
+	db.EXPECT().Do(ctx, mock.Match("EXISTS", streamName)).Return(mock.Result(mock.ValkeyInt64(0)))
+	db.EXPECT().Do(ctx, mock.Match("EXISTS", streamName)).Return(mock.Result(mock.ValkeyInt64(0)))
+	db.EXPECT().Do(ctx, mock.Match("EXISTS", streamName)).Return(mock.Result(mock.ValkeyInt64(0)))
+	db.EXPECT().Do(ctx, mock.Match("EXISTS", streamName)).Return(mock.Result(mock.ValkeyInt64(0)))
+
+	clientArg := &client.ClientArgs{
+		Instance: db,
+	}
+	c := &Consumer{
+		Client:       clientArg,
+		StreamName:   streamName,
+		GroupName:    groupName,
+		ConsumerName: consumerName,
+		Tries:        []int{1, 2, 3, 4},
 	}
 
-	err := consumer.waitForStream(context.Background())
+	err := c.waitForStream(ctx)
 	if err == nil {
-		t.Error("should no connect")
-	}
-
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
+		t.Fatalf("expected error, got nil")
 	}
 }
 
 func TestStillMineSuccess(t *testing.T) {
-	db, mock := redismock.NewClientMock()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	idle := time.Second * 1
+	ctx := context.Background()
+	db := mock.NewClient(ctrl)
+
 	messageId := "1676389477-0"
+	var idleStillMine int64 = 1
 
-	mock.ExpectXPendingExt(&redis.XPendingExtArgs{
-		Stream:   streamName,
-		Group:    groupName,
-		Idle:     idle,
-		Start:    messageId,
-		End:      messageId,
-		Count:    1,
-		Consumer: consumerName,
-	}).SetVal([]redis.XPendingExt{{}})
-
-	consumer := &Consumer{
-		ConsumerArgs: ConsumerArgs{
-			StreamName:         streamName,
-			GroupName:          groupName,
-			ConsumerName:       consumerName,
-			BatchSize:          0,
-			ClaimBatchSize:     nil,
-			PendingBatchSize:   nil,
-			Block:              0,
-			MinDurationToClaim: 0,
-			IdleStillMine:      idle,
-			Tries:              []int{},
-		},
-		client:                 db,
-		LatestPendingMessageId: "0-0",
+	db.EXPECT().Do(ctx, mock.Match("XPENDING", streamName, groupName, "IDLE", strconv.FormatInt(idleStillMine, 10), messageId, messageId, "1", consumerName)).Return(mock.Result(mock.ValkeyArray(valkey.ValkeyMessage{})))
+	clientArg := &client.ClientArgs{
+		Instance: db,
+	}
+	c := &Consumer{
+		Client:        clientArg,
+		StreamName:    streamName,
+		GroupName:     groupName,
+		ConsumerName:  consumerName,
+		IdleStillMine: idleStillMine,
 	}
 
-	ok, err := consumer.StillMine(context.Background(), messageId)
+	ok, err := c.StillMine(ctx, messageId)
 	if err != nil {
-		t.Error(err)
+		t.Fatalf("expected nil error, got %v", err)
 	}
 
 	if !ok {
-		t.Error("should be true")
-	}
-
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
+		t.Fatalf("expected true, got false")
 	}
 }
 
 func TestStillMineError(t *testing.T) {
-	db, mock := redismock.NewClientMock()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	idle := time.Second * 1
+	ctx := context.Background()
+	db := mock.NewClient(ctrl)
+
 	messageId := "1676389477-0"
+	var idleStillMine int64 = 1
 
-	mock.ExpectXPendingExt(&redis.XPendingExtArgs{
-		Stream:   streamName,
-		Group:    groupName,
-		Idle:     idle,
-		Start:    messageId,
-		End:      messageId,
-		Count:    1,
-		Consumer: consumerName,
-	}).SetErr(errors.New("error"))
-
-	consumer := &Consumer{
-		ConsumerArgs: ConsumerArgs{
-			StreamName:         streamName,
-			GroupName:          groupName,
-			ConsumerName:       consumerName,
-			BatchSize:          0,
-			ClaimBatchSize:     nil,
-			PendingBatchSize:   nil,
-			Block:              0,
-			MinDurationToClaim: 0,
-			IdleStillMine:      idle,
-			Tries:              []int{},
-		},
-		client:                 db,
-		LatestPendingMessageId: "0-0",
+	db.EXPECT().Do(ctx, mock.Match("XPENDING", streamName, groupName, "IDLE", strconv.FormatInt(idleStillMine, 10), messageId, messageId, "1", consumerName)).Return(mock.Result(mock.ValkeyError("error")))
+	clientArg := &client.ClientArgs{
+		Instance: db,
+	}
+	c := &Consumer{
+		Client:        clientArg,
+		StreamName:    streamName,
+		GroupName:     groupName,
+		ConsumerName:  consumerName,
+		IdleStillMine: idleStillMine,
 	}
 
-	ok, err := consumer.StillMine(context.Background(), messageId)
+	_, err := c.StillMine(ctx, messageId)
 	if err == nil {
-		t.Error("should no connect")
-	}
-
-	if ok {
-		t.Error("should be false")
-	}
-
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
+		t.Fatalf("expected error, got nil")
 	}
 }
 
 func TestStillMineFalse(t *testing.T) {
-	db, mock := redismock.NewClientMock()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	idle := time.Second * 1
+	ctx := context.Background()
+	db := mock.NewClient(ctrl)
+
 	messageId := "1676389477-0"
+	var idleStillMine int64 = 1
 
-	mock.ExpectXPendingExt(&redis.XPendingExtArgs{
-		Stream:   streamName,
-		Group:    groupName,
-		Idle:     idle,
-		Start:    messageId,
-		End:      messageId,
-		Count:    1,
-		Consumer: consumerName,
-	}).SetVal([]redis.XPendingExt{})
-
-	consumer := &Consumer{
-		ConsumerArgs: ConsumerArgs{
-			StreamName:         streamName,
-			GroupName:          groupName,
-			ConsumerName:       consumerName,
-			BatchSize:          0,
-			ClaimBatchSize:     nil,
-			PendingBatchSize:   nil,
-			Block:              0,
-			MinDurationToClaim: 0,
-			IdleStillMine:      idle,
-			Tries:              []int{},
-		},
-		client:                 db,
-		LatestPendingMessageId: "0-0",
+	db.EXPECT().Do(ctx, mock.Match("XPENDING", streamName, groupName, "IDLE", strconv.FormatInt(idleStillMine, 10), messageId, messageId, "1", consumerName)).Return(mock.Result(mock.ValkeyArray()))
+	clientArg := &client.ClientArgs{
+		Instance: db,
+	}
+	c := &Consumer{
+		Client:        clientArg,
+		StreamName:    streamName,
+		GroupName:     groupName,
+		ConsumerName:  consumerName,
+		IdleStillMine: idleStillMine,
 	}
 
-	ok, err := consumer.StillMine(context.Background(), messageId)
+	ok, err := c.StillMine(ctx, messageId)
 	if err != nil {
-		t.Error(err)
+		t.Fatalf("expected nil error, got %v", err)
 	}
 
 	if ok {
-		t.Error("should be false")
+		t.Fatalf("expected false, got true")
 	}
-
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
-	}
-
 }
 
 func TestAckSuccess(t *testing.T) {
-	db, mock := redismock.NewClientMock()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := context.Background()
+	db := mock.NewClient(ctrl)
 
 	messageId := "1676389477-0"
 
-	mock.ExpectXAck(streamName, groupName, messageId).SetVal(1)
-
-	consumer := &Consumer{
-		ConsumerArgs: ConsumerArgs{
-			StreamName:         streamName,
-			GroupName:          groupName,
-			ConsumerName:       consumerName,
-			BatchSize:          0,
-			ClaimBatchSize:     nil,
-			PendingBatchSize:   nil,
-			Block:              0,
-			MinDurationToClaim: 0,
-			IdleStillMine:      0,
-			Tries:              []int{},
-		},
-		client:                 db,
-		LatestPendingMessageId: "0-0",
+	db.EXPECT().Do(ctx, mock.Match("XACK", streamName, groupName, messageId)).Return(mock.Result(mock.ValkeyInt64(1)))
+	clientArg := &client.ClientArgs{
+		Instance: db,
+	}
+	c := &Consumer{
+		Client:       clientArg,
+		StreamName:   streamName,
+		GroupName:    groupName,
+		ConsumerName: consumerName,
 	}
 
-	err := consumer.Ack(context.Background(), messageId)
+	err := c.AcknowledgeMessage(ctx, messageId)
 	if err != nil {
-		t.Error(err)
-	}
-
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
+		t.Fatalf("expected nil error, got %v", err)
 	}
 }
 
 func TestAckError(t *testing.T) {
-	db, mock := redismock.NewClientMock()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ctx := context.Background()
+	db := mock.NewClient(ctrl)
 
 	messageId := "1676389477-0"
 
-	mock.ExpectXAck(streamName, groupName, messageId).SetErr(errors.New("error"))
-
-	consumer := &Consumer{
-		ConsumerArgs: ConsumerArgs{
-			StreamName:         streamName,
-			GroupName:          groupName,
-			ConsumerName:       consumerName,
-			BatchSize:          0,
-			ClaimBatchSize:     nil,
-			PendingBatchSize:   nil,
-			Block:              0,
-			MinDurationToClaim: 0,
-			IdleStillMine:      0,
-			Tries:              []int{},
-		},
-		client:                 db,
-		LatestPendingMessageId: "0-0",
+	db.EXPECT().Do(ctx, mock.Match("XACK", streamName, groupName, messageId)).Return(mock.Result(mock.ValkeyError("error")))
+	clientArg := &client.ClientArgs{
+		Instance: db,
+	}
+	c := &Consumer{
+		Client:       clientArg,
+		StreamName:   streamName,
+		GroupName:    groupName,
+		ConsumerName: consumerName,
 	}
 
-	err := consumer.Ack(context.Background(), messageId)
+	err := c.AcknowledgeMessage(ctx, messageId)
 	if err == nil {
-		t.Error("should no connect")
-	}
-
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
+		t.Fatalf("expected error, got nil")
 	}
 }
 
 func TestNewMessagesSuccess(t *testing.T) {
-	db, mock := redismock.NewClientMock()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	var batchSize int64 = 5
-	block := time.Millisecond * 1
+	ctx := context.Background()
+	db := mock.NewClient(ctrl)
 
-	readGroupsArgs := &redis.XReadGroupArgs{
-		Group:    groupName,
-		Consumer: consumerName,
-		Streams:  []string{streamName, ">"},
-		Count:    batchSize,
-		Block:    block,
-		NoAck:    false,
+	db.EXPECT().Do(ctx, mock.Match("XREADGROUP", "GROUP", groupName, consumerName, "COUNT", "1", "STREAMS", streamName, consumer_NEVER_DELIVERED_TO_OTHER_CONSUMERS_SO_FAR)).Return(mock.Result(mock.ValkeyArray(mock.ValkeyArray(mock.ValkeyNil(), mock.ValkeyNil()))))
+	clientArg := &client.ClientArgs{
+		Instance: db,
+	}
+	c := &Consumer{
+		Client:              clientArg,
+		StreamName:          streamName,
+		GroupName:           groupName,
+		ConsumerName:        consumerName,
+		BatchSizeNewMessage: 1,
 	}
 
-	data := map[string]any{"test": "test"}
-
-	msg := []redis.XMessage{
-		{
-			ID:     "1676389477-0",
-			Values: data,
-		},
-		{
-			ID:     "1676383497-0",
-			Values: data,
-		},
-		{
-			ID:     "1676289497-0",
-			Values: data,
-		},
-		{
-			ID:     "1676189497-0",
-			Values: data,
-		},
-		{
-			ID:     "1676369497-0",
-			Values: data,
-		},
-	}
-
-	stream := []redis.XStream{
-		{
-			Stream:   streamName,
-			Messages: msg,
-		},
-	}
-
-	mock.ExpectXReadGroup(readGroupsArgs).SetVal(stream)
-
-	consumer := &Consumer{
-		ConsumerArgs: ConsumerArgs{
-			StreamName:         streamName,
-			GroupName:          groupName,
-			ConsumerName:       consumerName,
-			BatchSize:          batchSize,
-			ClaimBatchSize:     nil,
-			PendingBatchSize:   nil,
-			Block:              block,
-			MinDurationToClaim: 0,
-			IdleStillMine:      0,
-			Tries:              []int{},
-		},
-		client:                 db,
-		LatestPendingMessageId: "0-0",
-	}
-
-	msgs, err := consumer.newMessages(context.Background())
+	_, err := c.NewMessages(ctx)
 	if err != nil {
-		t.Error(err)
-	}
-
-	if len(msgs) != 5 {
-		t.Fatalf("incomplete result set")
-	}
-
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
+		t.Fatalf("expected nil error, got %v", err)
 	}
 }
 
 func TestNewMessagesError(t *testing.T) {
-	db, mock := redismock.NewClientMock()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	var batchSize int64 = 5
-	block := time.Millisecond * 1
+	ctx := context.Background()
+	db := mock.NewClient(ctrl)
 
-	readGroupsArgs := &redis.XReadGroupArgs{
-		Group:    groupName,
-		Consumer: consumerName,
-		Streams:  []string{streamName, ">"},
-		Count:    batchSize,
-		Block:    block,
-		NoAck:    false,
+	db.EXPECT().Do(ctx, mock.Match("XREADGROUP", "GROUP", groupName, consumerName, "COUNT", "1", "STREAMS", streamName, consumer_NEVER_DELIVERED_TO_OTHER_CONSUMERS_SO_FAR)).Return(mock.Result(mock.ValkeyError("error")))
+	clientArg := &client.ClientArgs{
+		Instance: db,
+	}
+	c := &Consumer{
+		Client:              clientArg,
+		StreamName:          streamName,
+		GroupName:           groupName,
+		ConsumerName:        consumerName,
+		BatchSizeNewMessage: 1,
 	}
 
-	mock.ExpectXReadGroup(readGroupsArgs).SetErr(errors.New("error"))
-
-	consumer := &Consumer{
-		ConsumerArgs: ConsumerArgs{
-			StreamName:         streamName,
-			GroupName:          groupName,
-			ConsumerName:       consumerName,
-			BatchSize:          batchSize,
-			ClaimBatchSize:     nil,
-			PendingBatchSize:   nil,
-			Block:              block,
-			MinDurationToClaim: 0,
-			IdleStillMine:      0,
-			Tries:              []int{},
-		},
-		client:                 db,
-		LatestPendingMessageId: "0-0",
-	}
-
-	_, err := consumer.newMessages(context.Background())
+	_, err := c.NewMessages(ctx)
 	if err == nil {
-		t.Error("should no connect")
-	}
-
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
+		t.Fatalf("expected error, got nil")
 	}
 }
 
 func TestPendingMessagesSuccess(t *testing.T) {
-	db, mock := redismock.NewClientMock()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	var pendingBatchSize int64 = 5
-	block := time.Millisecond * 1
+	ctx := context.Background()
+	db := mock.NewClient(ctrl)
 
-	xReadGroupArgs := &redis.XReadGroupArgs{
-		Group:    groupName,
-		Consumer: consumerName,
-		Streams:  []string{streamName, "0-0"},
-		Count:    pendingBatchSize,
-		Block:    block,
-		NoAck:    false,
+	db.EXPECT().Do(ctx, mock.Match("XREADGROUP", "GROUP", groupName, consumerName, "COUNT", "1", "STREAMS", streamName, consumer_INITIAL_STREAM_ID)).Return(mock.Result(mock.ValkeyArray(mock.ValkeyArray(mock.ValkeyNil(), mock.ValkeyNil()))))
+	clientArg := &client.ClientArgs{
+		Instance: db,
 	}
 
-	data := map[string]any{"test": "test"}
-
-	msg := []redis.XMessage{
-		{
-			ID:     "1676389477-0",
-			Values: data,
-		},
-		{
-			ID:     "1676383497-0",
-			Values: data,
-		},
-		{
-			ID:     "1676289497-0",
-			Values: data,
-		},
-		{
-			ID:     "1676189497-0",
-			Values: data,
-		},
-		{
-			ID:     "1676369497-0",
-			Values: data,
-		},
+	var S int64 = 1
+	c := &Consumer{
+		Client:                 clientArg,
+		StreamName:             streamName,
+		GroupName:              groupName,
+		ConsumerName:           consumerName,
+		BatchSizePending:       &S,
+		latestPendingMessageId: consumer_INITIAL_STREAM_ID,
 	}
 
-	stream := []redis.XStream{
-		{
-			Stream:   streamName,
-			Messages: msg,
-		},
-	}
-
-	mock.ExpectXReadGroup(xReadGroupArgs).SetVal(stream)
-
-	consumer := &Consumer{
-		ConsumerArgs: ConsumerArgs{
-			StreamName:         streamName,
-			GroupName:          groupName,
-			ConsumerName:       consumerName,
-			BatchSize:          0,
-			ClaimBatchSize:     nil,
-			PendingBatchSize:   &pendingBatchSize,
-			Block:              block,
-			MinDurationToClaim: 0,
-			IdleStillMine:      0,
-			Tries:              []int{},
-		},
-		client:                 db,
-		LatestPendingMessageId: "0-0",
-	}
-
-	msgs, err := consumer.pendingMessages(context.Background())
+	_, err := c.PendingMessages(ctx)
 	if err != nil {
-		t.Error(err)
-	}
-
-	if len(msgs) != 5 {
-		t.Fatalf(fmt.Sprint("incomplete result set ", len(msgs)))
-	}
-
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
+		t.Fatalf("expected nil error, got %v", err)
 	}
 }
 
 func TestPendingMessagesError(t *testing.T) {
-	db, mock := redismock.NewClientMock()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	var pendingBatchSize int64 = 5
-	block := time.Millisecond * 1
+	ctx := context.Background()
+	db := mock.NewClient(ctrl)
 
-	xReadGroupArgs := &redis.XReadGroupArgs{
-		Group:    groupName,
-		Consumer: consumerName,
-		Streams:  []string{streamName, "0-0"},
-		Count:    pendingBatchSize,
-		Block:    block,
-		NoAck:    false,
+	db.EXPECT().Do(ctx, mock.Match("XREADGROUP", "GROUP", groupName, consumerName, "COUNT", "1", "STREAMS", streamName, consumer_INITIAL_STREAM_ID)).Return(mock.Result(mock.ValkeyError("error")))
+	clientArg := &client.ClientArgs{
+		Instance: db,
 	}
 
-	mock.ExpectXReadGroup(xReadGroupArgs).SetErr(errors.New("error"))
-
-	consumer := &Consumer{
-		ConsumerArgs: ConsumerArgs{
-			StreamName:         streamName,
-			GroupName:          groupName,
-			ConsumerName:       consumerName,
-			BatchSize:          0,
-			ClaimBatchSize:     nil,
-			PendingBatchSize:   &pendingBatchSize,
-			Block:              block,
-			MinDurationToClaim: 0,
-			IdleStillMine:      0,
-			Tries:              []int{},
-		},
-		client:                 db,
-		LatestPendingMessageId: "0-0",
+	var S int64 = 1
+	c := &Consumer{
+		Client:                 clientArg,
+		StreamName:             streamName,
+		GroupName:              groupName,
+		ConsumerName:           consumerName,
+		BatchSizePending:       &S,
+		latestPendingMessageId: consumer_INITIAL_STREAM_ID,
 	}
 
-	_, err := consumer.pendingMessages(context.Background())
+	_, err := c.PendingMessages(ctx)
 	if err == nil {
-		t.Error("should no connect")
-	}
-
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
+		t.Fatalf("expected error, got nil")
 	}
 }
 
-func TestClaimedSuccess(t *testing.T) {
-	db, mock := redismock.NewClientMock()
+func TestAutoClaimedSuccess(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	minDurationToClaim := time.Second * 1
-	var claimBatchSize int64 = 2
+	ctx := context.Background()
+	db := mock.NewClient(ctrl)
 
-	claimArgs := &redis.XAutoClaimArgs{
-		Stream:   streamName,
-		Group:    groupName,
-		Consumer: consumerName,
-		MinIdle:  minDurationToClaim,
-		Start:    FIRST_ID_INSIDE_THE_STREAM,
-		Count:    claimBatchSize,
+	messageId := "1676389477-0"
+	db.EXPECT().Do(ctx, mock.Match("XAUTOCLAIM", streamName, groupName, consumerName, "100", consumer_INITIAL_STREAM_ID, "COUNT", "1")).Return(mock.Result(mock.ValkeyArray(mock.ValkeyString(messageId), mock.ValkeyArray(mock.ValkeyArray(mock.ValkeyString(messageId), mock.ValkeyMap(make(map[string]valkey.ValkeyMessage)))))))
+	clientArg := &client.ClientArgs{
+		Instance: db,
+	}
+	var S int64 = 1
+	c := &Consumer{
+		Client:             clientArg,
+		StreamName:         streamName,
+		GroupName:          groupName,
+		ConsumerName:       consumerName,
+		MinIdleAutoClaim:   100,
+		nextIdAutoClaim:    consumer_INITIAL_STREAM_ID,
+		BatchSizeAutoClaim: &S,
 	}
 
-	data := map[string]any{"test": "test"}
-
-	msg := []redis.XMessage{
-		{
-			ID:     "1676389477-0",
-			Values: data,
-		},
-		{
-			ID:     "1676389497-0",
-			Values: data,
-		},
-	}
-
-	mock.ExpectXAutoClaim(claimArgs).SetVal(msg, "OK")
-
-	consumer := &Consumer{
-		ConsumerArgs: ConsumerArgs{
-			StreamName:         streamName,
-			GroupName:          groupName,
-			ConsumerName:       consumerName,
-			BatchSize:          0,
-			ClaimBatchSize:     &claimBatchSize,
-			PendingBatchSize:   nil,
-			Block:              0,
-			MinDurationToClaim: minDurationToClaim,
-			IdleStillMine:      0,
-			Tries:              []int{},
-		},
-		client:                 db,
-		LatestPendingMessageId: "0-0",
-	}
-
-	msgs, err := consumer.claimedMessages(context.Background())
+	_, err := c.AutoClaimMessages(ctx)
 	if err != nil {
-		t.Error(err)
-	}
-
-	if len(msgs) != 2 {
-		t.Fatalf("incomplete result set")
-	}
-
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
+		t.Fatalf("expected nil error, got %v", err)
 	}
 }
 
-func TestClaimedError(t *testing.T) {
-	db, mock := redismock.NewClientMock()
+func TestAutoClaimedError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	minDurationToClaim := time.Second * 1
-	var claimBatchSize int64 = 2
+	ctx := context.Background()
+	db := mock.NewClient(ctrl)
 
-	claimArgs := &redis.XAutoClaimArgs{
-		Stream:   streamName,
-		Group:    groupName,
-		Consumer: consumerName,
-		MinIdle:  minDurationToClaim,
-		Start:    FIRST_ID_INSIDE_THE_STREAM,
-		Count:    claimBatchSize,
+	db.EXPECT().Do(ctx, mock.Match("XAUTOCLAIM", streamName, groupName, consumerName, "100", consumer_INITIAL_STREAM_ID, "COUNT", "1")).Return(mock.Result(mock.ValkeyError("error")))
+	clientArg := &client.ClientArgs{
+		Instance: db,
+	}
+	var S int64 = 1
+	c := &Consumer{
+		Client:             clientArg,
+		StreamName:         streamName,
+		GroupName:          groupName,
+		ConsumerName:       consumerName,
+		MinIdleAutoClaim:   100,
+		nextIdAutoClaim:    consumer_INITIAL_STREAM_ID,
+		BatchSizeAutoClaim: &S,
 	}
 
-	mock.ExpectXAutoClaim(claimArgs).SetErr(errors.New("error"))
-
-	consumer := &Consumer{
-		ConsumerArgs: ConsumerArgs{
-			StreamName:         streamName,
-			GroupName:          groupName,
-			ConsumerName:       consumerName,
-			BatchSize:          0,
-			ClaimBatchSize:     &claimBatchSize,
-			PendingBatchSize:   nil,
-			Block:              0,
-			MinDurationToClaim: minDurationToClaim,
-			IdleStillMine:      0,
-			Tries:              []int{},
-		},
-		client:                 db,
-		LatestPendingMessageId: "0-0",
-	}
-
-	_, err := consumer.claimedMessages(context.Background())
+	_, err := c.AutoClaimMessages(ctx)
 	if err == nil {
-		t.Error("should no connect")
-	}
-
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Error(err)
+		t.Fatalf("expected error, got nil")
 	}
 }
