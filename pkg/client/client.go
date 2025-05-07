@@ -3,7 +3,6 @@ package client
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	"github.com/valkey-io/valkey-go"
 )
@@ -14,7 +13,7 @@ type ClientArgs struct {
 	Instance valkey.Client
 }
 
-var once sync.Once
+// var once sync.Once
 
 // newValkeyClient creates a new Valkey client and returns it along with any error encountered.
 // It takes a context.Context as input and uses the ClientArgs receiver to access the Host and Port fields.
@@ -34,9 +33,7 @@ func (r *ClientArgs) InitClient(ctx context.Context) error {
 		return err
 	}
 
-	once.Do(func() {
-		r.Instance = client
-	})
+	r.Instance = client
 
 	return nil
 }
