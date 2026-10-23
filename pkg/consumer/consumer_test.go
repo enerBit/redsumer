@@ -121,44 +121,96 @@ func TestWaitForStreamError(t *testing.T) {
 
 // ── validateConfig ────────────────────────────────────────────────────────────
 
+// validConfig returns a Consumer that passes validateConfig. Each test breaks a
+// single field so it fails for the reason the test names.
+func validConfig() *Consumer {
+	return &Consumer{
+		Client:       &client.ClientArgs{},
+		StreamName:   streamName,
+		GroupName:    groupName,
+		ConsumerName: consumerName,
+		BatchSize:    1,
+		ClaimBatch:   1,
+		RatioSlice:   []int{5},
+		PelWaitSlice: []int{0},
+		BackoffSlice: []int{0},
+	}
+}
+
+func TestInitConsumer_NilClient(t *testing.T) {
+	c := validConfig()
+	c.Client = nil
+	if !errors.Is(validateConfig(c), errors_custom.ErrInvalidConfig) {
+		t.Fatal("expected ErrInvalidConfig for nil Client")
+	}
+}
+
+func TestInitConsumer_EmptyStreamName(t *testing.T) {
+	c := validConfig()
+	c.StreamName = " "
+	if !errors.Is(validateConfig(c), errors_custom.ErrInvalidConfig) {
+		t.Fatal("expected ErrInvalidConfig for empty StreamName")
+	}
+}
+
+func TestInitConsumer_EmptyGroupName(t *testing.T) {
+	c := validConfig()
+	c.GroupName = ""
+	if !errors.Is(validateConfig(c), errors_custom.ErrInvalidConfig) {
+		t.Fatal("expected ErrInvalidConfig for empty GroupName")
+	}
+}
+
+func TestInitConsumer_EmptyConsumerName(t *testing.T) {
+	c := validConfig()
+	c.ConsumerName = ""
+	if !errors.Is(validateConfig(c), errors_custom.ErrInvalidConfig) {
+		t.Fatal("expected ErrInvalidConfig for empty ConsumerName")
+	}
+}
+
 func TestInitConsumer_EmptyRatioSlice(t *testing.T) {
-	c := &Consumer{BatchSize: 1, ClaimBatch: 1, RatioSlice: []int{}, PelWaitSlice: []int{0}, BackoffSlice: []int{0}}
+	c := validConfig()
+	c.RatioSlice = []int{}
 	if !errors.Is(validateConfig(c), errors_custom.ErrInvalidConfig) {
 		t.Fatal("expected ErrInvalidConfig for empty RatioSlice")
 	}
 }
 
 func TestInitConsumer_EmptyPelWaitSlice(t *testing.T) {
-	c := &Consumer{BatchSize: 1, ClaimBatch: 1, RatioSlice: []int{5}, PelWaitSlice: []int{}, BackoffSlice: []int{0}}
+	c := validConfig()
+	c.PelWaitSlice = []int{}
 	if !errors.Is(validateConfig(c), errors_custom.ErrInvalidConfig) {
 		t.Fatal("expected ErrInvalidConfig for empty PelWaitSlice")
 	}
 }
 
 func TestInitConsumer_EmptyBackoffSlice(t *testing.T) {
-	c := &Consumer{BatchSize: 1, ClaimBatch: 1, RatioSlice: []int{5}, PelWaitSlice: []int{0}, BackoffSlice: []int{}}
+	c := validConfig()
+	c.BackoffSlice = []int{}
 	if !errors.Is(validateConfig(c), errors_custom.ErrInvalidConfig) {
 		t.Fatal("expected ErrInvalidConfig for empty BackoffSlice")
 	}
 }
 
 func TestInitConsumer_ZeroBatchSize(t *testing.T) {
-	c := &Consumer{BatchSize: 0, ClaimBatch: 1, RatioSlice: []int{5}, PelWaitSlice: []int{0}, BackoffSlice: []int{0}}
+	c := validConfig()
+	c.BatchSize = 0
 	if !errors.Is(validateConfig(c), errors_custom.ErrInvalidConfig) {
 		t.Fatal("expected ErrInvalidConfig for BatchSize=0")
 	}
 }
 
 func TestInitConsumer_ZeroClaimBatch(t *testing.T) {
-	c := &Consumer{BatchSize: 1, ClaimBatch: 0, RatioSlice: []int{5}, PelWaitSlice: []int{0}, BackoffSlice: []int{0}}
+	c := validConfig()
+	c.ClaimBatch = 0
 	if !errors.Is(validateConfig(c), errors_custom.ErrInvalidConfig) {
 		t.Fatal("expected ErrInvalidConfig for ClaimBatch=0")
 	}
 }
 
 func TestInitConsumer_ValidConfig(t *testing.T) {
-	c := &Consumer{BatchSize: 1, ClaimBatch: 1, RatioSlice: []int{5}, PelWaitSlice: []int{0}, BackoffSlice: []int{0}}
-	if err := validateConfig(c); err != nil {
+	if err := validateConfig(validConfig()); err != nil {
 		t.Fatalf("expected nil for valid config, got %v", err)
 	}
 }
